@@ -1,0 +1,166 @@
+/* Loader CSS - Premium Dark Mode Pulse Animation */
+.loader-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+}
+
+/* Main loader - Orbital ring animation */
+.loader-ring {
+    --size: 48px;
+    --stroke: 3px;
+    width: var(--size);
+    height: var(--size);
+    position: relative;
+}
+
+.loader-ring::before,
+.loader-ring::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: var(--stroke) solid transparent;
+}
+
+.loader-ring::before {
+    border-top-color: rgba(255, 255, 255, 0.9);
+    border-right-color: rgba(255, 255, 255, 0.3);
+    animation: spin 1s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+}
+
+.loader-ring::after {
+    border-bottom-color: rgba(255, 255, 255, 0.1);
+    border-left-color: rgba(255, 255, 255, 0.05);
+    animation: spin 1.5s cubic-bezier(0.5, 0, 0.5, 1) infinite reverse;
+}
+
+/* Center dot */
+.loader-ring .loader-dot {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 8px;
+    height: 8px;
+    background: white;
+    border-radius: 50%;
+    animation: pulse 1s ease-in-out infinite;
+}
+
+/* Pulse bars alternative */
+.loader-bars {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 4px;
+    height: 32px;
+}
+
+.loader-bars span {
+    width: 4px;
+    background: linear-gradient(to top, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.9));
+    border-radius: 2px;
+    animation: bars 1s ease-in-out infinite;
+}
+
+.loader-bars span:nth-child(1) {
+    animation-delay: 0ms;
+    height: 60%;
+}
+
+.loader-bars span:nth-child(2) {
+    animation-delay: 100ms;
+    height: 80%;
+}
+
+.loader-bars span:nth-child(3) {
+    animation-delay: 200ms;
+    height: 100%;
+}
+
+.loader-bars span:nth-child(4) {
+    animation-delay: 300ms;
+    height: 80%;
+}
+
+.loader-bars span:nth-child(5) {
+    animation-delay: 400ms;
+    height: 60%;
+}
+
+/* Text shimmer */
+.loader-text {
+    font-size: 14px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.5);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    animation: textPulse 2s ease-in-out infinite;
+}
+
+/* Keyframes */
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 0.4;
+        transform: translate(-50%, -50%) scale(0.8);
+    }
+
+    50% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+
+@keyframes bars {
+
+    0%,
+    100% {
+        transform: scaleY(0.5);
+        opacity: 0.5;
+    }
+
+    50% {
+        transform: scaleY(1);
+        opacity: 1;
+    }
+}
+
+@keyframes textPulse {
+
+    0%,
+    100% {
+        opacity: 0.3;
+    }
+
+    50% {
+        opacity: 0.7;
+    }
+}
+
+/* Glassmorphism card for loader */
+.loader-card {
+    background: rgba(24, 24, 27, 0.5);
+    backdrop-filter: blur(24px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 24px;
+    padding: 48px 64px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+}
