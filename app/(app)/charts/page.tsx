@@ -5,21 +5,11 @@ import { AnimatedHeader, MotionDiv } from "@/components/motion-div"
 import { AIChatButton } from "@/components/ai-chat-button"
 import { useNetworkStats, usePNodes } from "@/hooks/use-pnodes"
 import { Activity, Zap, Server, Layers } from "lucide-react"
-import { useEffect, useState } from "react"
-import { fetchNetworkMetrics, type NetworkMetrics } from "@/lib/xandeum"
+import type { NetworkMetrics } from "@/lib/xandeum"
 
 export default function ChartsPage() {
     const { stats: networkStats } = useNetworkStats(5000); // Update every 5s
     const { nodes } = usePNodes({ pollingInterval: 30000, enablePolling: true, useGossipData: true });
-    const [metrics, setMetrics] = useState<NetworkMetrics | null>(null);
-
-    useEffect(() => {
-        fetchNetworkMetrics().then(setMetrics);
-        const interval = setInterval(() => {
-            fetchNetworkMetrics().then(setMetrics);
-        }, 30000);
-        return () => clearInterval(interval);
-    }, []);
 
     // Calculate region distribution from nodes
     const nodesByRegion = nodes.reduce((acc, node) => {
@@ -36,7 +26,7 @@ export default function ChartsPage() {
     const activeNodes = nodes.filter(n => n.status === "Active").length;
     const delinquentNodes = nodes.filter(n => n.status === "Delinquent").length;
 
-    const displayMetrics: NetworkMetrics = metrics || {
+    const displayMetrics: NetworkMetrics = {
         totalNodes: nodes.length,
         activeNodes,
         delinquentNodes,

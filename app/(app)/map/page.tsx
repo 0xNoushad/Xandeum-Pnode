@@ -1,18 +1,26 @@
-import { fetchPNodes, fetchNetworkStats } from "@/lib/xandeum";
+"use client";
+
+import { usePNodes, useNetworkStats } from "@/hooks/use-pnodes";
 import { MapPageClient } from "@/components/map-page-client";
 import { 
     filterNodesWithValidCoordinates, 
     aggregateNodesByLocation 
 } from "@/lib/node-utils";
 
-// Force dynamic rendering - don't try to fetch during build
-export const dynamic = "force-dynamic";
-
-export default async function MapPage() {
-    const [nodes, networkStats] = await Promise.all([
-        fetchPNodes(),
-        fetchNetworkStats(),
-    ]);
+export default function MapPage() {
+    const { nodes, isLoading } = usePNodes();
+    const { stats } = useNetworkStats();
+    
+    if (isLoading || nodes.length === 0) {
+        return (
+            <div className="h-[calc(100vh-4rem)] flex items-center justify-center">
+                <div className="text-center">
+                    <div className="h-8 w-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+                    <p className="text-zinc-500 text-sm">Loading map data...</p>
+                </div>
+            </div>
+        );
+    }
     
     // Filter out nodes with invalid coordinates (including [0, 0])
     const validNodes = filterNodesWithValidCoordinates(nodes);
@@ -40,8 +48,8 @@ export default async function MapPage() {
             activeNodes={activeNodes}
             totalRegions={totalRegions}
             networkStats={{
-                totalStake: networkStats.totalStake,
-                tps: networkStats.tps,
+                totalStake: stats?.totalStake || 0,
+                tps: stats?.tps || 0,
             }}
         />
     );
