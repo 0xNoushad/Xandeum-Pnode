@@ -9,9 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Real-time pNode monitoring via Xandeum devnet RPC
+- Real-time pNode monitoring via Xandeum RPC
 - Dashboard with validator counts, total stake, epoch progress, TPS
-- Interactive 3D globe showing node geographic distribution
 - Paginated nodes list with search, filter, and sort
 - Historical performance charts using Recharts
 - Health alerts for node status changes

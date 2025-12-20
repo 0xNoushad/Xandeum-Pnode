@@ -1,9 +1,10 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { TrendingUp, TrendingDown, DollarSign, ExternalLink } from "lucide-react";
+import { TrendingUp, TrendingDown, ExternalLink } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { 
     fetchXandPrice, 
     fetchXandPriceHistory, 
@@ -61,12 +62,15 @@ export function PriceCard() {
     return (
         <Card className="w-full h-full relative overflow-hidden transition-all hover:bg-zinc-900/60 group">
             <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                <DollarSign className="w-16 h-16 sm:w-24 sm:h-24 text-emerald-500" />
+                <Image src="/xandeum.png" alt="XAND" width={96} height={96} className="w-16 h-16 sm:w-24 sm:h-24" />
             </div>
 
             <CardHeader className="pb-2 p-4 sm:p-6 sm:pb-2">
                 <CardTitle className="text-zinc-100 flex items-center justify-between text-sm sm:text-base">
-                    <span>XAND Price</span>
+                    <div className="flex items-center gap-2">
+                        <Image src="/xandeum.png" alt="XAND" width={24} height={24} className="rounded-full" />
+                        <span>XAND Price</span>
+                    </div>
                     {price && (
                         <div className={`flex items-center gap-1 text-[10px] sm:text-xs font-medium px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full ${
                             isPositive 

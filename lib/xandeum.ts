@@ -13,8 +13,20 @@ import {
 export type PNode = PNodeMetrics;
 export type PNodeDetail = PNodeDetailedMetrics;
 
-// Fetch pNodes using real RPC
+// Fetch pNodes - prefers real gossip data, falls back to RPC
 export async function fetchPNodes(): Promise<PNode[]> {
+    try {
+        // Try gossip network first (real mainnet data - 84+ pods)
+        const gossipNodes = await xandeumRPC.fetchPodsAsPNodes();
+        if (gossipNodes.length > 0) {
+            console.log(`[xandeum] Using gossip data: ${gossipNodes.length} pods`);
+            return gossipNodes;
+        }
+    } catch {
+        // Gossip fetch failed, falling back to RPC
+    }
+    
+    // Fall back to RPC
     return xandeumRPC.fetchPNodes();
 }
 

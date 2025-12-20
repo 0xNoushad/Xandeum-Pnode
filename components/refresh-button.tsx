@@ -53,7 +53,7 @@ export function RefreshButton({ onClick, isLoading: externalLoading }: RefreshBu
                         duration: 0.3
                     }}
                 >
-                    <RefreshCw className={`h-4 w-4 transition-colors ${isLoading ? 'text-sky-400' : 'text-zinc-400 group-hover:text-zinc-100'}`} />
+                    <RefreshCw className={`h-4 w-4 transition-colors ${isLoading ? 'text-emerald-400' : 'text-zinc-400 group-hover:text-zinc-100'}`} />
                 </motion.div>
                 <AnimatePresence mode="wait">
                     {isLoading ? (
@@ -62,7 +62,7 @@ export function RefreshButton({ onClick, isLoading: externalLoading }: RefreshBu
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -10 }}
-                            className="text-sky-400"
+                            className="text-emerald-400"
                         >
                             Refreshing...
                         </motion.span>
