@@ -5,6 +5,9 @@ import {
     aggregateNodesByLocation 
 } from "@/lib/node-utils";
 
+// Force dynamic rendering - don't try to fetch during build
+export const dynamic = "force-dynamic";
+
 export default async function MapPage() {
     const [nodes, networkStats] = await Promise.all([
         fetchPNodes(),
