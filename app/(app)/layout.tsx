@@ -1,4 +1,5 @@
 import { Sidebar } from "@/components/sidebar";
+import { PNodeBotWrapper } from "@/components/pnode-bot/bot-wrapper";
 
 export default function AppLayout({
   children,
@@ -16,6 +17,8 @@ export default function AppLayout({
           </div>
         </main>
       </div>
+      {/* pNode Bot - appears on all dashboard pages */}
+      <PNodeBotWrapper />
     </div>
   );
 }

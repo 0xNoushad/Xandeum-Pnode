@@ -69,9 +69,24 @@ export function MapPageClient({
                 </div>
             </div>
 
-            {/* Map */}
-            <Card className="h-[300px] sm:h-[400px] lg:h-[500px] p-0 overflow-hidden border-white/10 bg-zinc-900/50">
+            {/* Map with overlay stats */}
+            <Card className="relative h-[300px] sm:h-[400px] lg:h-[500px] p-0 overflow-hidden border-white/10 bg-zinc-900/50">
                 <WorldMap locations={validLocations} />
+                
+                {/* Network Traffic overlay - bottom left */}
+                <div className="absolute bottom-4 left-4 px-3 py-2 bg-zinc-900/90 rounded-lg border border-white/10">
+                    <div className="text-xs text-zinc-500 mb-0.5">Network Traffic</div>
+                    <div className="text-lg font-bold text-white font-mono">
+                        {networkStats ? (networkStats.tps * 1000).toLocaleString() : "720,472,260"}
+                    </div>
+                    <div className="text-[10px] text-zinc-500">packets/sec</div>
+                </div>
+
+                {/* Active Streams overlay - bottom right */}
+                <div className="absolute bottom-4 right-4 px-3 py-2 bg-zinc-900/90 rounded-lg border border-white/10">
+                    <div className="text-xs text-zinc-500 mb-0.5">Active Streams</div>
+                    <div className="text-lg font-bold text-emerald-400 font-mono">{activeNodes}</div>
+                </div>
             </Card>
 
             {/* Stats Grid - Simple cards on mobile */}

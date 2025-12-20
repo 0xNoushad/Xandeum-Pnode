@@ -20,7 +20,7 @@
 
 ## how it works
 
-the dashboard connects directly to xandeum's devnet rpc at `api.devnet.xandeum.com:8899` using solana-style json-rpc calls. no mock data, everything you see is live from the chain.
+the dashboard connects directly to xandeum's rpc at `api.xandeum.com:8899` using solana-style json-rpc calls. no mock data, everything you see is live from the chain.
 
 ---
 

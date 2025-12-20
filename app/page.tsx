@@ -164,7 +164,7 @@ export default function LandingPage() {
               transition={{ delay: 0.4 }}
               className="space-y-2"
             >
-              <TerminalLine prefix="$" text="connecting to devnet..." delay={0.5} typing />
+              <TerminalLine prefix="$" text="connecting to xandeum..." delay={0.5} typing />
               
               <motion.div
                 initial={{ opacity: 0 }}
@@ -172,7 +172,7 @@ export default function LandingPage() {
                 transition={{ delay: 1.5 }}
                 className="text-[10px] sm:text-sm text-zinc-500"
               >
-                → connected to api.devnet.xandeum.com:8899
+                → connected to api.xandeum.com:8899
               </motion.div>
 
               <motion.div

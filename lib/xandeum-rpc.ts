@@ -5,15 +5,28 @@
  * Two APIs:
  * 1. Solana-style RPC (port 8899) - for validator/cluster data
  * 2. pRPC (port 6000) - for pNode-specific stats (get-version, get-stats, get-pods)
+ *    → pRPC is now handled by lib/prpc module
  */
 
-// Primary Solana-style RPC endpoint for cluster/validator data
-// Set NEXT_PUBLIC_XANDEUM_RPC env var to use mainnet or custom RPC
-const XANDEUM_RPC = process.env.NEXT_PUBLIC_XANDEUM_RPC || "https://api.devnet.xandeum.com:8899";
+import {
+    getPNodeVersion,
+    getPNodeStats,
+    getPods,
+    getPodsWithStats,
+    fetchPodStats as prpcFetchPodStats,
+    extractIP,
+    type PRPCVersion,
+    type PRPCStats,
+    type PRPCPodsResponse,
+    type PRPCPodWithStats,
+} from "./prpc";
 
-// pRPC endpoint for pNode-specific data (individual node stats)
-// Note: This requires direct access to a pNode's port 6000
-const PRPC_ENDPOINT = "http://127.0.0.1:6000/rpc";
+// Primary Solana-style RPC endpoint for cluster/validator data
+// Set NEXT_PUBLIC_XANDEUM_RPC env var to use custom RPC
+const XANDEUM_RPC = process.env.NEXT_PUBLIC_XANDEUM_RPC || "https://api.xandeum.com:8899";
+
+// Re-export pRPC types from the prpc module
+export type { PRPCVersion, PRPCStats, PRPCPod, PRPCPodsResponse } from "./prpc";
 
 // Connection status types
 export type ConnectionStatus = "connected" | "connecting" | "disconnected" | "error";
@@ -73,6 +86,53 @@ export interface SupplyInfo {
     total: number;
 }
 
+// Leader schedule from RPC
+export interface LeaderSchedule {
+    epoch: number;
+    slotLeaders: Record<string, number[]>; // pubkey -> slot indices
+    leaderCount: number;
+}
+
+// Block production stats from RPC
+export interface BlockProduction {
+    slot: number;
+    range: { firstSlot: number; lastSlot: number };
+    validators: {
+        pubkey: string;
+        leaderSlots: number;
+        blocksProduced: number;
+        skipRate: number;
+    }[];
+    totalLeaderSlots: number;
+    totalBlocksProduced: number;
+}
+
+// Inflation reward from RPC
+export interface InflationReward {
+    address: string;
+    epoch: number;
+    effectiveSlot: number;
+    amount: number; // lamports
+    postBalance: number;
+    commission?: number;
+}
+
+// Inflation rate from RPC
+export interface InflationRate {
+    total: number;
+    validator: number;
+    foundation: number;
+    epoch: number;
+}
+
+// Stake activation from RPC
+export interface StakeActivation {
+    pubkey: string;
+    state: "active" | "inactive" | "activating" | "deactivating";
+    active: number;
+    inactive: number;
+}
+
 // Geolocation data from IP lookup
 export interface GeoLocation {
     country: string;
@@ -124,11 +184,14 @@ export interface PNodeMetrics {
     uptimePercentage: number;
     lastHeartbeat: number;
     latency?: number;
-    // Storage data (real when pRPC port 6000 is accessible)
+    // Storage data from get-pods-with-stats (REAL data)
     storage: {
-        used: number;
-        capacity: number;
+        used: number;      // storage_used in bytes
+        capacity: number;  // storage_committed in bytes
     };
+    storageUsagePercent?: number;  // storage_usage_percent from API
+    uptimeSeconds?: number;        // uptime in seconds from API
+    isPublic?: boolean;            // is_public from API
     credits: number;
     shardCount?: number;
     peersConnected?: number;
@@ -186,58 +249,14 @@ export interface StatusChange {
 
 type StatusChangeCallback = (nodes: PNodeMetrics[], changes: StatusChange[]) => void;
 
-// pRPC response types (from pNode RPC API)
-export interface PRPCVersion {
-    version: string;
-}
-
-export interface PRPCStats {
-    metadata: {
-        total_bytes: number;
-        total_pages: number;
-        last_updated: number;
-    };
-    stats: {
-        cpu_percent: number;
-        ram_used: number;
-        ram_total: number;
-        uptime: number;
-        packets_received: number;
-        packets_sent: number;
-        active_streams: number;
-    };
-    file_size: number;
-}
-
-export interface PRPCPod {
-    address: string;
-    version: string;
-    last_seen: string;
-    last_seen_timestamp: number;
-}
-
-export interface PRPCPodsResponse {
-    pods: PRPCPod[];
-    total_count: number;
-}
-
 // Geolocation cache to avoid rate limiting
 const geoCache = new Map<string, GeoLocation>();
-
-// Extract IP from gossip address
-function extractIP(gossipAddress: string | null): string | null {
-    if (!gossipAddress) return null;
-    const match = gossipAddress.match(/^(\d+\.\d+\.\d+\.\d+)/);
-    return match ? match[1] : null;
-}
 
 // Check if running on server
 const isServer = typeof window === "undefined";
 
-// Get base URL for API calls (needed for server-side fetch to our own API routes)
 function getBaseUrl(): string {
     if (!isServer) return ""; // Client-side can use relative URLs
-    // On Vercel, use VERCEL_URL or hardcoded production URL
     const vercelUrl = process.env.VERCEL_URL;
     if (vercelUrl) return `https://${vercelUrl}`;
     // Fallback to production URL
@@ -345,74 +364,26 @@ class XandeumRPCClient {
         return data.result;
     }
 
-    // Make pRPC call to pNode (port 6000)
-    // This is for pNode-specific stats like get-version, get-stats, get-pods
-    private async prpcCall<T>(method: string, endpoint: string = PRPC_ENDPOINT): Promise<T> {
-        try {
-            const response = await fetch(endpoint, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    jsonrpc: "2.0",
-                    id: Date.now(),
-                    method,
-                }),
-            });
-
-            const data = await response.json();
-            
-            if (data.error) {
-                throw new Error(data.error.message || "pRPC Error");
-            }
-            
-            return data.result;
-        } catch (error) {
-            console.warn(`[pRPC] Call to ${method} failed:`, error);
-            throw error;
-        }
+    // pRPC methods - delegated to lib/prpc module
+    async fetchPodsFromNetwork(): Promise<PRPCPodsResponse | null> {
+        return getPods();
     }
 
-    // pRPC: Get pNode version
-    async getPNodeVersion(endpoint?: string): Promise<PRPCVersion | null> {
-        try {
-            return await this.prpcCall<PRPCVersion>("get-version", endpoint);
-        } catch {
-            return null;
-        }
-    }
-
-    // pRPC: Get pNode stats (CPU, RAM, storage, network)
-    async getPNodeStats(endpoint?: string): Promise<PRPCStats | null> {
-        try {
-            return await this.prpcCall<PRPCStats>("get-stats", endpoint);
-        } catch {
-            return null;
-        }
-    }
-
-    // pRPC: Get all known pods in the network
-    async getPods(endpoint?: string): Promise<PRPCPodsResponse | null> {
-        try {
-            return await this.prpcCall<PRPCPodsResponse>("get-pods", endpoint);
-        } catch {
-            return null;
-        }
-    }
-
-    // Try to fetch pRPC data from a node's gossip address
     async fetchPRPCFromNode(gossipAddress: string): Promise<{ version: PRPCVersion | null; stats: PRPCStats | null; pods: PRPCPodsResponse | null }> {
         const ip = extractIP(gossipAddress);
         if (!ip) return { version: null, stats: null, pods: null };
         
-        const prpcEndpoint = `http://${ip}:6000/rpc`;
-        
         const [version, stats, pods] = await Promise.all([
-            this.getPNodeVersion(prpcEndpoint),
-            this.getPNodeStats(prpcEndpoint),
-            this.getPods(prpcEndpoint),
+            getPNodeVersion(ip),
+            getPNodeStats(ip),
+            getPods(ip),
         ]);
         
         return { version, stats, pods };
+    }
+
+    async fetchPodStats(podAddress: string): Promise<PRPCStats | null> {
+        return prpcFetchPodStats(podAddress);
     }
 
     // Fetch cluster nodes from Xandeum network
@@ -540,6 +511,153 @@ class XandeumRPCClient {
         return this.rpcCall<number>("getBlockHeight");
     }
 
+    // Get leader schedule for current or specified epoch
+    async getLeaderSchedule(epoch?: number): Promise<LeaderSchedule | null> {
+        try {
+            const params: unknown[] = epoch !== undefined ? [epoch] : [];
+            const result = await this.rpcCall<Record<string, number[]> | null>("getLeaderSchedule", params);
+            if (!result) return null;
+            
+            // Convert to structured format
+            const schedule: LeaderSchedule = {
+                epoch: epoch ?? this.epochInfo?.epoch ?? 0,
+                slotLeaders: result,
+                leaderCount: Object.keys(result).length,
+            };
+            console.log(`[XandeumRPC] Fetched leader schedule: ${schedule.leaderCount} leaders`);
+            return schedule;
+        } catch (error) {
+            console.error("[XandeumRPC] Failed to fetch leader schedule:", error);
+            return null;
+        }
+    }
+
+    // Get block production stats for validators
+    async getBlockProduction(identity?: string): Promise<BlockProduction | null> {
+        try {
+            const config: { identity?: string } = {};
+            if (identity) config.identity = identity;
+            
+            const result = await this.rpcCall<{
+                context: { slot: number };
+                value: {
+                    byIdentity: Record<string, [number, number]>; // [leaderSlots, blocksProduced]
+                    range: { firstSlot: number; lastSlot: number };
+                };
+            }>("getBlockProduction", Object.keys(config).length > 0 ? [config] : []);
+            
+            const validators = Object.entries(result.value.byIdentity).map(([pubkey, [leaderSlots, blocksProduced]]) => ({
+                pubkey,
+                leaderSlots,
+                blocksProduced,
+                skipRate: leaderSlots > 0 ? ((leaderSlots - blocksProduced) / leaderSlots) * 100 : 0,
+            }));
+
+            const production: BlockProduction = {
+                slot: result.context.slot,
+                range: result.value.range,
+                validators,
+                totalLeaderSlots: validators.reduce((sum, v) => sum + v.leaderSlots, 0),
+                totalBlocksProduced: validators.reduce((sum, v) => sum + v.blocksProduced, 0),
+            };
+            
+            console.log(`[XandeumRPC] Fetched block production: ${validators.length} validators`);
+            return production;
+        } catch (error) {
+            console.error("[XandeumRPC] Failed to fetch block production:", error);
+            return null;
+        }
+    }
+
+    // Get inflation rewards for specified addresses
+    async getInflationReward(addresses: string[], epoch?: number): Promise<InflationReward[]> {
+        try {
+            const config = epoch !== undefined ? { epoch } : undefined;
+            const result = await this.rpcCall<Array<{
+                epoch: number;
+                effectiveSlot: number;
+                amount: number;
+                postBalance: number;
+                commission?: number;
+            } | null>>("getInflationReward", config ? [addresses, config] : [addresses]);
+            
+            const rewards: InflationReward[] = [];
+            result.forEach((reward, index) => {
+                if (reward) {
+                    rewards.push({
+                        address: addresses[index],
+                        epoch: reward.epoch,
+                        effectiveSlot: reward.effectiveSlot,
+                        amount: reward.amount,
+                        postBalance: reward.postBalance,
+                        commission: reward.commission,
+                    });
+                }
+            });
+            
+            console.log(`[XandeumRPC] Fetched inflation rewards for ${rewards.length}/${addresses.length} addresses`);
+            return rewards;
+        } catch (error) {
+            console.error("[XandeumRPC] Failed to fetch inflation rewards:", error);
+            return [];
+        }
+    }
+
+    // Get inflation rate info
+    async getInflationRate(): Promise<InflationRate | null> {
+        try {
+            const result = await this.rpcCall<{
+                total: number;
+                validator: number;
+                foundation: number;
+                epoch: number;
+            }>("getInflationRate");
+            
+            return {
+                total: result.total,
+                validator: result.validator,
+                foundation: result.foundation,
+                epoch: result.epoch,
+            };
+        } catch (error) {
+            console.error("[XandeumRPC] Failed to fetch inflation rate:", error);
+            return null;
+        }
+    }
+
+    // Get stake activation info for a stake account
+    async getStakeActivation(pubkey: string, epoch?: number): Promise<StakeActivation | null> {
+        try {
+            const config = epoch !== undefined ? { epoch } : undefined;
+            const result = await this.rpcCall<{
+                state: "active" | "inactive" | "activating" | "deactivating";
+                active: number;
+                inactive: number;
+            }>("getStakeActivation", config ? [pubkey, config] : [pubkey]);
+            
+            return {
+                pubkey,
+                state: result.state,
+                active: result.active,
+                inactive: result.inactive,
+            };
+        } catch (error) {
+            console.error("[XandeumRPC] Failed to fetch stake activation:", error);
+            return null;
+        }
+    }
+
+    // Get minimum stake delegation
+    async getStakeMinimumDelegation(): Promise<number> {
+        try {
+            const result = await this.rpcCall<{ value: number }>("getStakeMinimumDelegation");
+            return result.value;
+        } catch (error) {
+            console.error("[XandeumRPC] Failed to fetch stake minimum delegation:", error);
+            return 0;
+        }
+    }
+
     // Fetch all pNodes with real metrics
     async fetchPNodes(forceRefresh = false): Promise<PNodeMetrics[]> {
         const now = Date.now();
@@ -600,13 +718,8 @@ class XandeumRPCClient {
                     const maxPossibleCredits = recentCredits.length * 432000; // slots per epoch
                     uptimePercentage = Math.min(100, (totalCredits / maxPossibleCredits) * 100 * 1.5);
                 } else if (status === "Active") {
-                    // Derive from pubkey for consistency (no random)
-                    let hash = 0;
-                    for (let i = 0; i < node.pubkey.length; i++) {
-                        hash = ((hash << 5) - hash) + node.pubkey.charCodeAt(i);
-                        hash = hash & hash;
-                    }
-                    uptimePercentage = 95 + (Math.abs(hash) % 500) / 100; // 95-100%
+                    const hash = this.hashPubkey(node.pubkey);
+                    uptimePercentage = 95 + (hash % 500) / 100; // 95-100%
                 }
 
                 // Calculate credits from epoch credits - REAL DATA
@@ -617,12 +730,7 @@ class XandeumRPCClient {
                 }
 
                 // Derive storage/latency from pubkey hash for consistency
-                let pkHash = 0;
-                for (let i = 0; i < node.pubkey.length; i++) {
-                    pkHash = ((pkHash << 5) - pkHash) + node.pubkey.charCodeAt(i);
-                    pkHash = pkHash & pkHash;
-                }
-                pkHash = Math.abs(pkHash);
+                const pkHash = this.hashPubkey(node.pubkey);
 
                 return {
                     pubkey: node.pubkey,
@@ -676,31 +784,33 @@ class XandeumRPCClient {
     // Fetch detailed metrics for a specific pNode
     async fetchPNodeDetail(pubkey: string): Promise<PNodeDetailedMetrics | null> {
         try {
-            const pNodes = await this.fetchPNodes();
-            const basicNode = pNodes.find(n => n.pubkey === pubkey);
+            // First try to find in gossip data (mainnet pods)
+            let basicNode: PNodeMetrics | undefined;
+            
+            try {
+                const gossipNodes = await this.fetchPodsAsPNodes();
+                basicNode = gossipNodes.find(n => n.pubkey === pubkey);
+                if (basicNode) {
+                    console.log(`[XandeumRPC] Found node ${pubkey.slice(0, 8)}... in gossip data`);
+                }
+            } catch {
+                // Gossip fetch failed, will try RPC
+            }
+
+            // Fall back to RPC data if not found in gossip
+            if (!basicNode) {
+                const pNodes = await this.fetchPNodes();
+                basicNode = pNodes.find(n => n.pubkey === pubkey);
+            }
 
             if (!basicNode) {
+                console.warn(`[XandeumRPC] Node ${pubkey.slice(0, 8)}... not found in gossip or RPC`);
                 return null;
             }
 
-            // Try to fetch real pRPC stats from the node
-            let prpcStats: PRPCStats | null = null;
-            let prpcVersion: PRPCVersion | null = null;
-            
-            if (basicNode.gossipAddress && basicNode.gossipAddress !== "N/A") {
-                try {
-                    const prpcData = await this.fetchPRPCFromNode(basicNode.gossipAddress);
-                    prpcStats = prpcData.stats;
-                    prpcVersion = prpcData.version;
-                    if (prpcStats) {
-                        console.log(`[pRPC] Got real stats from ${basicNode.pubkey.slice(0, 8)}...`);
-                    }
-                } catch {
-                    // pRPC not available for this node, use enriched data
-                }
-            }
-
-            return this.enrichWithDetailedMetrics(basicNode, prpcStats, prpcVersion);
+            // Skip pRPC stats fetch - port 6000 is usually blocked/times out
+            // Just return enriched metrics from the basic node data
+            return this.enrichWithDetailedMetrics(basicNode, null, null);
         } catch (error) {
             console.error("[XandeumRPC] Error fetching pNode detail:", error);
             return null;
@@ -731,16 +841,18 @@ class XandeumRPCClient {
         const now = new Date();
         const pk = node.pubkey;
 
-        // Use real pRPC stats if available
-        const realUptime = prpcStats?.stats.uptime;
-        const realCpuPercent = prpcStats?.stats.cpu_percent;
-        const realRamUsed = prpcStats?.stats.ram_used;
-        const realRamTotal = prpcStats?.stats.ram_total;
-        const realFileSize = prpcStats?.file_size;
-        const realTotalBytes = prpcStats?.metadata.total_bytes;
-        const realPacketsIn = prpcStats?.stats.packets_received;
-        const realPacketsOut = prpcStats?.stats.packets_sent;
-        const realActiveStreams = prpcStats?.stats.active_streams;
+        // Use real pRPC stats if available (flat structure from xandeum-prpc)
+        // OR use the stats already on the node from get-pods-with-stats
+        const realUptime = prpcStats?.uptime ?? node.uptimeSeconds;
+        const realCpuPercent = prpcStats?.cpu_percent;
+        const realRamUsed = prpcStats?.ram_used;
+        const realRamTotal = prpcStats?.ram_total;
+        const realFileSize = prpcStats?.file_size ?? node.storage?.used;
+        const realTotalBytes = prpcStats?.total_bytes;
+        const realPacketsIn = prpcStats?.packets_received;
+        const realPacketsOut = prpcStats?.packets_sent;
+        const realActiveStreams = prpcStats?.active_streams;
+        const realStorageCapacity = node.storage?.capacity;
 
         // Generate 30-day history - deterministic based on pubkey + day index
         const history = Array.from({ length: 30 }).map((_, i) => {
@@ -814,18 +926,23 @@ class XandeumRPCClient {
             ? realPacketsOut * 1024 
             : this.derivedValue(pk, 10000, 8, 80) * 1024 * 1024 * 1024;
 
-        // Join date derived from pubkey (consistent per node)
-        const daysActive = realUptime 
-            ? Math.floor(realUptime / 86400)
+        // Join date derived from real uptime or pubkey (consistent per node)
+        const uptimeForCalc = realUptime || node.uptimeSeconds || 0;
+        const daysActive = uptimeForCalc > 0
+            ? Math.floor(uptimeForCalc / 86400)
             : this.derivedValue(pk, 11000, 30, 180);
 
         return {
             ...node,
-            // Override storage with real pRPC data if available
+            // Preserve storage from node (already has real data from get-pods-with-stats)
             storage: {
                 used: realFileSize || realTotalBytes || node.storage.used,
-                capacity: node.storage.capacity,
+                capacity: realStorageCapacity || node.storage.capacity,
             },
+            // Preserve real stats from get-pods-with-stats
+            storageUsagePercent: node.storageUsagePercent,
+            uptimeSeconds: realUptime || node.uptimeSeconds,
+            isPublic: node.isPublic,
             history,
             hardware: {
                 cpu: cpuOptions[cpuIndex],
@@ -987,14 +1104,111 @@ class XandeumRPCClient {
     getEpochInfo(): EpochInfo | null {
         return this.epochInfo;
     }
+
+    // Fetch pods from gossip network and convert to PNodeMetrics format
+    // Uses get-pods-with-stats for richer data (storage, uptime, etc.)
+    async fetchPodsAsPNodes(skipGeo = false): Promise<PNodeMetrics[]> {
+        let podsResponse: PRPCPodsResponse | null = null;
+        
+        // Try get-pods-with-stats first for richer data
+        try {
+            podsResponse = await getPodsWithStats();
+        } catch {
+            // Silently fail, will try regular get-pods
+        }
+        
+        // Fall back to regular get-pods if with-stats fails
+        if (!podsResponse || !podsResponse.pods || podsResponse.pods.length === 0) {
+            try {
+                podsResponse = await this.fetchPodsFromNetwork();
+            } catch {
+                // Both failed, return empty
+                return [];
+            }
+        }
+        
+        if (!podsResponse || !podsResponse.pods || podsResponse.pods.length === 0) {
+            return [];
+        }
+
+        // Filter out pods without address
+        const uniquePods = (podsResponse.pods as PRPCPodWithStats[]).filter(pod => !!pod.address);
+
+        // Extract IPs for geolocation (handle optional address)
+        const ips = uniquePods
+            .map(pod => pod.address?.split(':')[0])
+            .filter((ip): ip is string => !!ip);
+        
+        // Skip geo lookups for faster initial load if requested
+        const geoLocations = skipGeo ? new Map<string, GeoLocation>() : await batchFetchGeoLocations(ips);
+        const now = Date.now();
+
+        return uniquePods.map(pod => {
+            const ip = pod.address?.split(':')[0];
+            const geo = ip ? geoLocations.get(ip) : null;
+            
+            // Calculate time since last seen
+            const lastSeenMs = pod.last_seen_timestamp * 1000;
+            const timeSinceLastSeen = now - lastSeenMs;
+            // Use 10 minute threshold - gossip updates can be delayed
+            const isOnline = timeSinceLastSeen < 10 * 60 * 1000;
+
+            // Use REAL data from get-pods-with-stats when available
+            const storageUsed = pod.storage_used ?? 0;
+            const storageCommitted = pod.storage_committed ?? 0;
+            const storagePercent = pod.storage_usage_percent ?? 0;
+            const uptime = pod.uptime ?? 0;
+            const rpcPort = pod.rpc_port ?? 6000;
+
+            // Use pubkey if available, otherwise generate a deterministic ID from address
+            const pubkeyOrId = pod.pubkey || `addr:${pod.address}`;
+            
+            return {
+                pubkey: pubkeyOrId,
+                gossipAddress: pod.address!,
+                rpcAddress: rpcPort ? `${ip}:${rpcPort}` : null,
+                version: pod.version || "unknown",
+                featureSet: null,
+                shredVersion: null,
+                status: isOnline ? "Active" as const : "Offline" as const,
+                isValidator: false,
+                activatedStake: 0,
+                commission: 0,
+                lastVote: 0,
+                epochCredits: 0,
+                rootSlot: 0,
+                votePubkey: null,
+                location: geo ? `${geo.city}, ${geo.country}` : "Unknown",
+                coordinates: geo ? [geo.lat, geo.lon] as [number, number] : [0, 0] as [number, number],
+                country: geo?.country || "Unknown",
+                city: geo?.city || "Unknown",
+                isp: geo?.isp || "Unknown",
+                // Real uptime percentage from pod stats
+                uptimePercentage: isOnline ? Math.min(100, (uptime / 86400) * 100) : 0,
+                lastHeartbeat: lastSeenMs,
+                latency: undefined, // No latency data from gossip
+                storage: {
+                    used: storageUsed,
+                    capacity: storageCommitted,
+                },
+                // Store raw values for detail page
+                storageUsagePercent: storagePercent,
+                uptimeSeconds: uptime,
+                isPublic: pod.is_public ?? false,
+                credits: 0,
+                shardCount: 0,
+                peersConnected: podsResponse.total_count - 1,
+            };
+        });
+    }
+
+    // Get raw pods data from gossip network
+    async getRawPods(): Promise<PRPCPodsResponse | null> {
+        return this.fetchPodsFromNetwork();
+    }
 }
 
 // Export singleton instance
 export const xandeumRPC = new XandeumRPCClient();
 
-// Convenience exports
-export const fetchPNodes = () => xandeumRPC.fetchPNodes();
-export const fetchPNodeDetail = (pubkey: string) => xandeumRPC.fetchPNodeDetail(pubkey);
-export const getNetworkStats = () => xandeumRPC.getNetworkStats();
-export const createNodeStatusPoller = (callback: StatusChangeCallback, interval?: number) => 
-    xandeumRPC.createNodeStatusPoller(callback, interval);
+

@@ -1,7 +1,7 @@
 "use client";
 
 import { memo } from "react";
-import { DottedMap } from "@/components/ui/dotted-map";
+import { GeoJsonMap } from "@/components/ui/geojson-map";
 
 interface Location {
     lat: number;
@@ -31,18 +31,11 @@ export const WorldMap = memo(function WorldMap({
         }));
 
     return (
-        <div className="relative h-full w-full overflow-hidden rounded-lg bg-zinc-950">
-            {/* Radial gradient overlay */}
-            <div 
-                className="absolute inset-0 pointer-events-none z-10" 
-                style={{ background: "radial-gradient(ellipse at center, transparent 40%, rgba(9,9,11,0.8) 100%)" }}
-            />
-            
-            {/* Map */}
-            <DottedMap 
+        <div className="relative h-full w-full overflow-hidden rounded-lg">
+            <GeoJsonMap 
                 markers={markers} 
                 markerColor={dotColor}
-                dotRadius={0.15}
+                showLabel={false}
             />
         </div>
     );

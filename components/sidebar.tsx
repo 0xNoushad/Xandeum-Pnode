@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Sidebar as SidebarContainer, SidebarBody, SidebarLink, useSidebar } from "@/components/ui/sidebar";
-import { LayoutDashboard, Server, Map as MapIcon, BarChart3, HelpCircle } from "lucide-react"
+import { LayoutDashboard, Server, Map as MapIcon, BarChart3, HelpCircle, ArrowLeftRight, Star } from "lucide-react"
 import Link from "next/link";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
@@ -11,7 +11,9 @@ import { cn } from "@/lib/utils";
 const links = [
     { label: "Overview", href: "/dashboard", icon: <LayoutDashboard className="h-5 w-5 flex-shrink-0 text-zinc-400 group-hover/sidebar:text-zinc-100 transition-colors" strokeWidth={1.5} /> },
     { label: "Live Nodes", href: "/nodes", icon: <Server className="h-5 w-5 flex-shrink-0 text-zinc-400 group-hover/sidebar:text-zinc-100 transition-colors" strokeWidth={1.5} /> },
+    { label: "Watchlist", href: "/watchlist", icon: <Star className="h-5 w-5 flex-shrink-0 text-zinc-400 group-hover/sidebar:text-zinc-100 transition-colors" strokeWidth={1.5} /> },
     { label: "Global Map", href: "/map", icon: <MapIcon className="h-5 w-5 flex-shrink-0 text-zinc-400 group-hover/sidebar:text-zinc-100 transition-colors" strokeWidth={1.5} /> },
+    { label: "Swap", href: "/swap", icon: <ArrowLeftRight className="h-5 w-5 flex-shrink-0 text-zinc-400 group-hover/sidebar:text-zinc-100 transition-colors" strokeWidth={1.5} /> },
     { label: "Performance", href: "/charts", icon: <BarChart3 className="h-5 w-5 flex-shrink-0 text-zinc-400 group-hover/sidebar:text-zinc-100 transition-colors" strokeWidth={1.5} /> },
     { label: "About Xandeum", href: "/about", icon: <HelpCircle className="h-5 w-5 flex-shrink-0 text-zinc-400 group-hover/sidebar:text-zinc-100 transition-colors" strokeWidth={1.5} /> },
 ];

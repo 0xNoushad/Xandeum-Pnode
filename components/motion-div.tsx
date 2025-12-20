@@ -4,11 +4,11 @@ import { motion, Variants, HTMLMotionProps } from "framer-motion"
 import { ReactNode } from "react"
 
 export const fadeInUp: Variants = {
-    hidden: { opacity: 0, y: 20 },
+    hidden: { opacity: 0, transform: "translateY(20px)" },
     visible: {
         opacity: 1,
-        y: 0,
-        transition: { duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }
+        transform: "translateY(0px)",
+        transition: { duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }
     }
 }
 
@@ -59,11 +59,11 @@ export const staggerContainer: Variants = {
 }
 
 export const staggerItem: Variants = {
-    hidden: { opacity: 0, y: 20 },
+    hidden: { opacity: 0, transform: "translateY(20px)" },
     visible: {
         opacity: 1,
-        y: 0,
-        transition: { duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }
+        transform: "translateY(0px)",
+        transition: { duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }
     }
 }
 
