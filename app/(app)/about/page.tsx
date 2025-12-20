@@ -61,12 +61,12 @@ export default function AboutPage() {
                         icon={FileText}
                     />
                     <ResourceLink
-                        href="https://twitter.com/xaboratory"
+                        href="https://x.com/Xandeum"
                         label="Twitter"
                         icon={Twitter}
                     />
                     <ResourceLink
-                        href="https://discord.gg/xandeum"
+                        href="https://discord.com/invite/mGAxAuwnR9"
                         label="Discord"
                         icon={MessageCircle}
                     />
